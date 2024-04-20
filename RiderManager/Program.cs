@@ -16,6 +16,7 @@ using RiderManager.Services.RabbitMQService;
 using RiderManager.Services.MinioStorageService;
 using RiderManager.Managers;
 using RiderManager.Services.PreSignedService;
+using RiderManager.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,18 +30,8 @@ builder.Services.AddMinio(configureClient => configureClient
 
 var rabbitMQConfig = builder.Configuration.GetSection("RabbitMQ").Get<RabbitMQOptions>();
 builder.Services.AddSingleton<RabbitMQOptions>(rabbitMQConfig);
+builder.Services.Configure<RabbitMQOptions>(builder.Configuration.GetSection("RabbitMQ"));
 
-builder.Services.AddSingleton<IConnection>(sp =>
-{
-    var rabbitMQOptions = sp.GetRequiredService<RabbitMQOptions>();
-    var factory = new ConnectionFactory()
-    {
-        HostName = rabbitMQOptions.HostName,
-        UserName = rabbitMQOptions.UserName,
-        Password = rabbitMQOptions.Password
-    };
-    return factory.CreateConnection();
-});
 
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
@@ -74,13 +65,16 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddControllers(); builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddControllers(); 
+builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddAutoMapper(typeof(Program));
 builder.Services.AddScoped<AdminAuthorizationFilter>();
 builder.Services.AddScoped<AuthorizationFilter>();
 builder.Services.AddScoped<IRiderService, RiderService>();
 builder.Services.AddScoped<IRiderRepository, RiderRepository>();
-builder.Services.AddScoped<IMessagingConsumerService, MessagingConsumerService>();
+builder.Services.AddSingleton<IRabbitMqService, RabbitMqService>();
+builder.Services.AddSingleton<IMessagingConsumerService, MessagingConsumerService>();
+builder.Services.AddHostedService<ConsumerHostedService>();
 builder.Services.AddScoped<IMinioFileStorageService, MinioFileStorageService>();
 builder.Services.AddScoped<IPresignedUrlService, PresignedUrlService>();
 builder.Services.AddScoped<IRiderManager, RidersManager>();

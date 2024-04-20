@@ -41,7 +41,7 @@ namespace RiderManager.Services.PreSignedService
 
         public async Task StorePresignedUrlAsync(UploadFileEntity uploadedFile)
         {
-            var rider = await _context.Riders.FindAsync(uploadedFile.riderId);
+            var rider = await _context.Riders.FirstOrDefaultAsync(r => r.UserId == uploadedFile.riderId);
             if (rider == null) throw new ArgumentException("Rider not found");
 
             var presignedUrl = new PresignedUrl

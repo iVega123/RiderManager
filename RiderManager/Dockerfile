@@ -3,21 +3,21 @@
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 USER app
 WORKDIR /app
-EXPOSE 8080
-EXPOSE 8081
+EXPOSE 8000
+EXPOSE 8001
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["RiderManager/RiderManager.csproj", "RiderManager/"]
+COPY ["RiderManager/RiderManager/RiderManager.csproj", "RiderManager/"]
 RUN dotnet restore "./RiderManager/RiderManager.csproj"
 COPY . .
 WORKDIR "/src/RiderManager"
-RUN dotnet build "./RiderManager.csproj" -c $BUILD_CONFIGURATION -o /app/build
+RUN dotnet build "./RiderManager/RiderManager.csproj" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
 ARG BUILD_CONFIGURATION=Release
-RUN dotnet publish "./RiderManager.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "./RiderManager/RiderManager.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app

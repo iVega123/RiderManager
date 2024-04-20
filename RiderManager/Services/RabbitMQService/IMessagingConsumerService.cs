@@ -2,6 +2,6 @@
 {
     public interface IMessagingConsumerService
     {
-        void StartConsuming();
+        Task StartConsuming();
     }
 }
