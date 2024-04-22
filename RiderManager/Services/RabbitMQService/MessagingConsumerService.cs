@@ -17,8 +17,10 @@ namespace RiderManager.Services.RabbitMQService
         private readonly IConnection _connection;
         private readonly string _riderInfoQueueName;
         private readonly string _imageStreamQueueName;
+        private readonly string _riderInfoPoisonQueueName;
         private readonly IServiceProvider _serviceProvider;
         private ConcurrentDictionary<string, List<ImagePart>> imagePartsStore = new ConcurrentDictionary<string, List<ImagePart>>();
+        private ConcurrentDictionary<string, int> riderInfoRetryCounts = new ConcurrentDictionary<string, int>();
 
         public MessagingConsumerService(IRabbitMqService mqService,
             ILogger<MessagingConsumerService> logger, 
@@ -29,6 +31,7 @@ namespace RiderManager.Services.RabbitMQService
             _logger = logger;
             _riderInfoQueueName = options.RiderInfoQueueName;
             _imageStreamQueueName = options.ImageStreamQueueName;
+            _riderInfoPoisonQueueName = options.RiderPoisonStreamQueueName;
             _channel = _connection.CreateModel();
             InitializeQueues();
             _serviceProvider = serviceProvider;
@@ -45,6 +48,7 @@ namespace RiderManager.Services.RabbitMQService
         {
             ConsumeQueueAsync(_riderInfoQueueName, ProcessRiderInfo);
             ConsumeQueueAsync(_imageStreamQueueName, ProcessImageStream);
+            ConsumePoisonQueue(_riderInfoPoisonQueueName);
             await Task.CompletedTask;
         }
 
@@ -75,19 +79,92 @@ namespace RiderManager.Services.RabbitMQService
         private async Task ProcessRiderInfo(string message)
         {
             var riderInfo = JsonSerializer.Deserialize<RiderMQEntity>(message);
-            using (var scope = _serviceProvider.CreateScope())
+            string messageId = riderInfo.UserId;
+
+            if (!riderInfoRetryCounts.TryGetValue(messageId, out int currentRetryCount))
             {
-                var riderManager = scope.ServiceProvider.GetRequiredService<IRiderManager>();
-                await riderManager.AddRiderAsync(new RiderDTO
-                {
-                    UserId = riderInfo.UserId,
-                    Name = riderInfo.Email,
-                    CNPJ = riderInfo.CNPJ,
-                    DateOfBirth = riderInfo.DataNascimento,
-                    CNHNumber = riderInfo.CNHNumber,
-                    CNHType = riderInfo.CNHType
-                });
+                currentRetryCount = 0;
             }
+
+            try
+            {
+                using (var scope = _serviceProvider.CreateScope())
+                {
+                    var riderManager = scope.ServiceProvider.GetRequiredService<IRiderManager>();
+                    await riderManager.AddRiderAsync(new RiderDTO
+                    {
+                        UserId = riderInfo.UserId,
+                        Email = riderInfo.Email,
+                        Name = riderInfo.Name,
+                        CNPJ = riderInfo.CNPJ,
+                        DateOfBirth = riderInfo.DateOfBirth,
+                        CNHNumber = riderInfo.CNHNumber,
+                        CNHType = riderInfo.CNHType
+                    });
+                    riderInfoRetryCounts.TryRemove(messageId, out _);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Error processing rider info: {ex.Message}", ex);
+                currentRetryCount++;
+                if (currentRetryCount >= 3)
+                {
+                    _logger.LogError($"Max retry attempts exceeded for message {messageId}. Moving to poison queue.");
+                    MoveToPoisonQueue(message, "RiderInfoPoisonQueue");
+                    riderInfoRetryCounts.TryRemove(messageId, out _);
+                }
+                else
+                {
+                    riderInfoRetryCounts[messageId] = currentRetryCount;
+                }
+            }
+        }
+
+        public async Task ConsumePoisonQueue(string poisonQueueName)
+        {
+            var consumer = new EventingBasicConsumer(_channel);
+            consumer.Received += async (model, ea) =>
+            {
+                var retriesHeader = ea.BasicProperties.Headers?.ContainsKey("x-retries") ?? false
+                    ? Convert.ToInt32(ea.BasicProperties.Headers["x-retries"])
+                    : 0;
+
+                var body = ea.Body.ToArray();
+                var message = Encoding.UTF8.GetString(body);
+
+                try
+                {
+                    await ProcessRiderInfo(message);
+                    _channel.BasicAck(ea.DeliveryTag, false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError($"Error processing poison message: {ex.Message}", ex);
+                    if (retriesHeader < 3)
+                    {
+                        ScheduleRetry(message, retriesHeader + 1);
+                    }
+                    else
+                    {
+                        _logger.LogError($"Message {ea.BasicProperties.MessageId} dropped after 3 retries.");
+                    }
+                    _channel.BasicNack(ea.DeliveryTag, false, false);
+                }
+            };
+
+            _channel.BasicConsume(queue: poisonQueueName, autoAck: false, consumer: consumer);
+        }
+
+        private void ScheduleRetry(string message, int retryCount)
+        {
+            var delay = (int)Math.Pow(2, retryCount) * 1000; // Exponential backoff, e.g., 2s, 4s, 8s
+            var properties = _channel.CreateBasicProperties();
+            properties.Headers = new Dictionary<string, object> { { "x-retries", retryCount } };
+            properties.Expiration = delay.ToString();
+
+            _channel.QueueDeclare($"retry-poison-{retryCount}", durable: true, exclusive: false, autoDelete: false);
+            _channel.BasicPublish("", $"retry-poison-{retryCount}", properties, Encoding.UTF8.GetBytes(message));
         }
 
 
@@ -137,6 +214,12 @@ namespace RiderManager.Services.RabbitMQService
             };
 
             return formFile;
+        }
+
+        private void MoveToPoisonQueue(string message, string poisonQueueName)
+        {
+            _channel.QueueDeclare(queue: poisonQueueName, durable: true, exclusive: false, autoDelete: false);
+            _channel.BasicPublish(exchange: "", routingKey: poisonQueueName, basicProperties: null, body: Encoding.UTF8.GetBytes(message));
         }
 
         public void Dispose()

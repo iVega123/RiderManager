@@ -17,6 +17,7 @@ using RiderManager.Services.MinioStorageService;
 using RiderManager.Managers;
 using RiderManager.Services.PreSignedService;
 using RiderManager.Services;
+using Serilog.Sinks.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,14 +34,20 @@ builder.Services.AddSingleton<RabbitMQOptions>(rabbitMQConfig);
 builder.Services.Configure<RabbitMQOptions>(builder.Configuration.GetSection("RabbitMQ"));
 
 
+var applicationName = builder.Configuration["ApplicationName"];
+
+var elasticUrl = builder.Configuration["ElasticSearchURL"];
+
 Log.Logger = new LoggerConfiguration()
     .Enrich.FromLogContext()
+    .Enrich.WithProperty("ApplicationName", applicationName)
     .WriteTo.Console()
-    .WriteTo.Http(
-        requestUri: "http://localhost:5000",
-        queueLimitBytes: 10000000,
-        restrictedToMinimumLevel: Serilog.Events.LogEventLevel.Warning,
-        textFormatter: new CompactJsonFormatter())
+    .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUrl))
+    {
+        AutoRegisterTemplate = true,
+        AutoRegisterTemplateVersion = AutoRegisterTemplateVersion.ESv7,
+        IndexFormat = $"{applicationName.ToLower()}-logs-{DateTime.UtcNow:yyyy.MM}"
+    })
     .CreateLogger();
 
 builder.Host.UseSerilog();

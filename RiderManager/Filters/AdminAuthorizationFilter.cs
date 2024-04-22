@@ -18,29 +18,42 @@ namespace RiderManager.Filters
 
         public void OnAuthorization(AuthorizationFilterContext context)
         {
+
+            bool isAuthenticated = false;
             var userIdentity = context.HttpContext.User.Identity as ClaimsIdentity;
-
             var isAdmin = userIdentity?.Claims.Any(c => c.Type == ClaimTypes.Role && c.Value == "Admin");
-
-            if (!isAdmin.GetValueOrDefault())
+            if (isAdmin.GetValueOrDefault())
             {
-                context.Result = new ForbidResult();
-                return;
+                isAuthenticated = true;
             }
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = context.HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
-            var tokenValid = tokenHandler.CanReadToken(token);
-            if (!tokenValid)
+            var expectedApiKey = _configuration["RiderManagerApiKey"];
+            var actualApiKey = context.HttpContext.Request.Headers["X-API-Key"];
+            if (!string.IsNullOrWhiteSpace(actualApiKey) && actualApiKey == expectedApiKey)
+            {
+                isAuthenticated = true;
+            }
+
+            if (!isAuthenticated)
+            {
+                var token = context.HttpContext.Request.Headers["Authorization"].ToString().Replace("Bearer ", "");
+                if (!string.IsNullOrWhiteSpace(token) && ValidateToken(token))
+                {
+                    isAuthenticated = true;
+                }
+            }
+
+            if (!isAuthenticated)
             {
                 context.Result = new UnauthorizedResult();
-                return;
             }
+        }
 
+        private bool ValidateToken(string token)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
             var jwtKey = _configuration["JwtKey"] ?? throw new InvalidOperationException("JwtKey is not set in the configuration.");
-
             var keyBytes = Encoding.UTF8.GetBytes(jwtKey);
-
             var validationParameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
@@ -51,11 +64,12 @@ namespace RiderManager.Filters
 
             try
             {
-                var principal = tokenHandler.ValidateToken(token, validationParameters, out _);
+                var principal = tokenHandler.ValidateToken(token, validationParameters, out var securityToken);
+                return securityToken != null && principal != null;
             }
-            catch (Exception)
+            catch
             {
-                context.Result = new UnauthorizedResult();
+                return false;
             }
         }
     }

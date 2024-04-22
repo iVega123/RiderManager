@@ -8,14 +8,16 @@ namespace RiderManager.DTOs
 
         public required string CNPJ { get; set; }
 
-        public DateTime DataNascimento { get; set; }
+        public required string Name { get; set; }
 
-        public required string NumeroCNH { get; set; }
+        public DateTime DateOfBirth { get; set; }
 
-        public required string TipoCNH { get; set; }
+        public required string CNHNumber { get; set; }
+
+        public required string CNHType { get; set; }
 
         public required string UserId { get; set; }
 
-        public string? ImagemCNH { get; set; }
+        public string? CNHUrl { get; set; }
     }
 }

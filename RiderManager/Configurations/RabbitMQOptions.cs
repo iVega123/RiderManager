@@ -7,5 +7,6 @@
         public required string Password { get; set; }
         public required string RiderInfoQueueName { get; set;}
         public required string ImageStreamQueueName { get; set;}
+        public required string RiderPoisonStreamQueueName { get; set;}
     }
 }

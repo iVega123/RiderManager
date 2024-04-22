@@ -10,7 +10,7 @@ namespace RiderManager.Services.MinioStorageService
     {
         private readonly IMinioClient _minioClient;
         private readonly IConfiguration _configuration;
-        private readonly string[] permittedExtensions = { ".png", ".jpg", ".jpeg", ".bmp" };
+        private readonly string[] permittedExtensions = { ".png", ".bmp" };
         private const long maxFileSize = 8 * 1024 * 1024; // 8 Megabytes
 
         public MinioFileStorageService(IMinioClient minioClient, IConfiguration configuration)
@@ -33,7 +33,7 @@ namespace RiderManager.Services.MinioStorageService
             var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
             if (!permittedExtensions.Contains(extension))
             {
-                throw new InvalidOperationException("Invalid file type. Only PNG, JPEG, and BMP files are allowed.");
+                throw new InvalidOperationException("Invalid file type. Only PNG and BMP files are allowed.");
             }
 
             string uniqueFileName = $"{DateTime.UtcNow:yyyyMMddHHmmssfff}{extension}";

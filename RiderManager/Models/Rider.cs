@@ -4,6 +4,7 @@
     {
         public required string Id { get; set; }
         public required string UserId { get; set; }
+        public required string Email { get; set; }
         public required string Name { get; set; }
         public required string CNPJ { get; set; }
         public DateTime DateOfBirth { get; set; }

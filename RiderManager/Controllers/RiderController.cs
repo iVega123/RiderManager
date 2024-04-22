@@ -27,7 +27,7 @@ namespace RiderManager.Controllers
             return Ok(riders);
         }
 
-        [Authorize]
+
         [ServiceFilter(typeof(AdminAuthorizationFilter))]
         [HttpGet("{userId}")]
         public async Task<IActionResult> GetRiderByUserId(string userId)
@@ -41,22 +41,7 @@ namespace RiderManager.Controllers
         }
 
         [Authorize]
-        [ServiceFilter(typeof(AuthorizationFilter))]
-        [HttpPost]
-        public async Task<IActionResult> AddRider([FromForm] RiderDTO riderDto)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            await _riderManager.AddRiderAsync(riderDto);
-
-            return Ok("Entregador criado com sucesso!");
-        }
-
-        [Authorize]
-        [ServiceFilter(typeof(AuthorizationFilter))]
+        [ServiceFilter(typeof(AdminAuthorizationFilter))]
         [HttpPut("{userId}")]
         public async Task<IActionResult> UpdateRider(string userId, [FromForm] RiderDTO riderDto)
         {
@@ -70,7 +55,7 @@ namespace RiderManager.Controllers
         }
 
         [Authorize]
-        [ServiceFilter(typeof(AuthorizationFilter))]
+        [ServiceFilter(typeof(AdminAuthorizationFilter))]
         [HttpDelete("{userId}")]
         public async Task<IActionResult> DeleteRider(string userId)
         {

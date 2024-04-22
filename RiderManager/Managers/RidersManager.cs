@@ -77,7 +77,7 @@ namespace RiderManager.Managers
                         var link = await _minioFileStorageService.GetPresignedUrlAsync(uploadFile.fileName, uploadFile.riderId);
                         await _preSignedUrlService.StorePresignedUrlAsync(link);
                     }
-                    rider.ImagemCNH = uploadFile.fileUrl;
+                    rider.CNHUrl = uploadFile.fileUrl;
                     riderDtos.Add(rider);
                 }
                 else
