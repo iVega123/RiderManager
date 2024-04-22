@@ -41,20 +41,31 @@ namespace RiderManager.Services.PreSignedService
 
         public async Task StorePresignedUrlAsync(UploadFileEntity uploadedFile)
         {
-            var rider = await _context.Riders.FirstOrDefaultAsync(r => r.UserId == uploadedFile.riderId);
+            var rider = await _context.Riders.Include(r => r.CNHUrl).FirstOrDefaultAsync(r => r.UserId == uploadedFile.riderId);
             if (rider == null) throw new ArgumentException("Rider not found");
 
-            var presignedUrl = new PresignedUrl
+            if (rider.CNHUrl != null)
             {
-                Id = Guid.NewGuid().ToString(),
-                ObjectName = uploadedFile.fileName,
-                Url = uploadedFile.fileUrl,
-                Expiry = uploadedFile.expiryDate,
-                RiderId = uploadedFile.riderId
-            };
+                rider.CNHUrl.ObjectName = uploadedFile.fileName;
+                rider.CNHUrl.Url = uploadedFile.fileUrl;
+                rider.CNHUrl.Expiry = uploadedFile.expiryDate;
+            }
+            else
+            {
+                var presignedUrl = new PresignedUrl
+                {
+                    Id = Guid.NewGuid().ToString(),
+                    ObjectName = uploadedFile.fileName,
+                    Url = uploadedFile.fileUrl,
+                    Expiry = uploadedFile.expiryDate,
+                    RiderId = uploadedFile.riderId,
+                    Rider = rider,
+                };
 
-            rider.CNHUrl = presignedUrl;
-            _context.Update(rider);
+                rider.CNHUrl = presignedUrl;
+                _context.PresignedUrls.Add(presignedUrl);
+            }
+
             await _context.SaveChangesAsync();
         }
     }

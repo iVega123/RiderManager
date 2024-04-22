@@ -11,27 +11,36 @@ namespace RiderManager.Data
         }
 
         public DbSet<Rider> Riders { get; set; }
-
         public DbSet<PresignedUrl> PresignedUrls { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
-            modelBuilder.Entity<Rider>()
-                .HasIndex(m => m.CNPJ)
-                .IsUnique();
+            base.OnModelCreating(modelBuilder);
 
-            modelBuilder.Entity<Rider>()
-                .HasIndex(u => u.CNHNumber)
-                .IsUnique();
+            ConfigureRiderEntity(modelBuilder);
+            ConfigurePresignedUrlEntity(modelBuilder);
+        }
 
-            modelBuilder.Entity<Rider>()
-                .HasOne(r => r.CNHUrl)
-                .WithOne(p => p.Rider)
-                .HasForeignKey<PresignedUrl>(p => p.RiderId);
+        private void ConfigureRiderEntity(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Rider>(entity =>
+            {
+                entity.HasIndex(r => r.CNPJ).IsUnique();
+                entity.HasIndex(r => r.CNHNumber).IsUnique();
 
-            modelBuilder.Entity<PresignedUrl>()
-                .HasIndex(p => p.ObjectName)
-                .IsUnique();
+                entity.HasOne(r => r.CNHUrl)
+                      .WithOne(p => p.Rider)
+                      .HasForeignKey<PresignedUrl>(p => p.RiderId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+        }
+
+        private void ConfigurePresignedUrlEntity(ModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<PresignedUrl>(entity =>
+            {
+                entity.HasIndex(p => p.ObjectName).IsUnique();
+            });
         }
     }
 }

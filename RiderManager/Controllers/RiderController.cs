@@ -42,20 +42,6 @@ namespace RiderManager.Controllers
 
         [Authorize]
         [ServiceFilter(typeof(AdminAuthorizationFilter))]
-        [HttpPut("{userId}")]
-        public async Task<IActionResult> UpdateRider(string userId, [FromForm] RiderDTO riderDto)
-        {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(ModelState);
-            }
-
-            await _riderManager.UpdateRiderAsync(userId, riderDto);
-            return Ok("Entregador atualizado com sucesso!");
-        }
-
-        [Authorize]
-        [ServiceFilter(typeof(AdminAuthorizationFilter))]
         [HttpDelete("{userId}")]
         public async Task<IActionResult> DeleteRider(string userId)
         {
@@ -69,6 +55,13 @@ namespace RiderManager.Controllers
         public async Task<IActionResult> UpdateRiderCNH(IFormFile cnhFile)
         {
             var userId = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
+
+            var role = User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Role)?.Value;
+
+            if (role.Contains("Admin"))
+            {
+                return Unauthorized("Only Riders can Update their Photos...");
+            }
 
             if (userId == null)
             {
